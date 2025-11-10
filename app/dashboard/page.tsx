@@ -93,6 +93,12 @@ export default async function Dashboard() {
             hint="See what visitors see"
             href="/explore"
           />
+          <Card
+            title="Account"
+            value={user.email}
+            hint="Update your profile and account details"
+            href="/profile"  // Changed from "/dashboard/profile"
+          />
         </div>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">

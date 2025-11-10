@@ -58,6 +58,9 @@ export default function SiteHeader() {
             </>
           ) : (
             <>
+            <Link href="/profile" className="rounded-lg border border-emerald-900/15 bg-white px-3 py-2 text-xs font-medium text-emerald-900 shadow-sm hover:bg-emerald-50">
+              Profile
+            </Link>
               <Link href="/dashboard" className="rounded-lg border border-emerald-900/15 bg-white px-3 py-2 text-xs font-medium text-emerald-900 shadow-sm hover:bg-emerald-50">
                 Dashboard
               </Link>

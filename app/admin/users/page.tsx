@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { headers, cookies } from "next/headers";
+import Link from "next/link";
 
 async function apiFetch(path: string, init: RequestInit = {}) {
   const h = await headers();
@@ -42,6 +43,14 @@ export default async function AdminUsersPage() {
     await apiFetch(`/api/admin/users/${id}/hard-delete`, { method: "POST" });
   }
 
+  async function updateStatus(id: string, status: string) {
+    "use server";
+    await apiFetch(`/api/admin/users/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  }
+
   async function invite(formData: FormData) {
     "use server";
     const email = String(formData.get("email") || "");
@@ -60,13 +69,21 @@ export default async function AdminUsersPage() {
         <div className="absolute -right-24 -bottom-24 h-96 w-96 rounded-full bg-amber-200/30 blur-3xl" />
       </div>
 
-      <section className="mx-auto max-w-6xl p-6 sm:p-10">
-        <header className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-emerald-950">Admin · Users</h1>
-          <p className="text-sm text-emerald-900/70">Invite, soft-delete, or permanently remove users.</p>
+      <section className="mx-auto max-w-7xl p-6 sm:p-10">
+        <header className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-semibold text-emerald-950">Admin · Users</h1>
+            <p className="text-sm text-emerald-900/70">Invite, manage, soft-delete, or permanently remove users.</p>
+          </div>
+          <Link
+            href="/admin/users/create"
+            className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-emerald-700"
+          >
+            + Create User
+          </Link>
         </header>
 
-        <form action={invite} className="rounded-2xl border border-emerald-900/10 bg-white/70 p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row gap-3 sm:items-end">
+        <form action={invite} className="rounded-2xl border border-emerald-900/10 bg-white/70 p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row gap-3 sm:items-end mb-6">
           <div className="flex-1">
             <label className="block text-sm font-medium text-emerald-950">Invite email</label>
             <input name="email" type="email" required className="mt-1 w-full rounded-xl border border-emerald-900/15 bg-white px-3 py-2 shadow-inner outline-none focus:border-emerald-600/40 focus:ring-1 focus:ring-emerald-600/20" placeholder="user@example.com" />
@@ -83,13 +100,14 @@ export default async function AdminUsersPage() {
           <button type="submit" className="rounded-xl bg-emerald-600 text-white px-4 py-2 shadow-sm hover:bg-emerald-700">Send invite</button>
         </form>
 
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-emerald-900/10 bg-white/70 shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-emerald-900/10 bg-white/70 shadow-sm">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b border-emerald-900/10">
                 <th className="p-3">Email</th>
                 <th className="p-3">Name</th>
                 <th className="p-3">Role</th>
+                <th className="p-3">Status</th>
                 <th className="p-3">Verified</th>
                 <th className="p-3">Deleted</th>
                 <th className="p-3">Actions</th>
@@ -101,22 +119,55 @@ export default async function AdminUsersPage() {
                   <td className="p-3">{u.email}</td>
                   <td className="p-3">{u.name || "—"}</td>
                   <td className="p-3">{u.role}</td>
+                  <td className="p-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium border ${
+                        u.status === "VERIFIED" || u.status === "ACTIVE"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : u.status === "PENDING"
+                          ? "bg-amber-50 text-amber-800 border-amber-200"
+                          : u.status === "SUSPENDED"
+                          ? "bg-rose-50 text-rose-800 border-rose-200"
+                          : "bg-slate-50 text-slate-800 border-slate-200"
+                      }`}
+                    >
+                      {u.status || "PENDING"}
+                    </span>
+                  </td>
                   <td className="p-3">{u.emailVerified ? "Yes" : "No"}</td>
                   <td className="p-3">{u.deletedAt ? "Yes" : "No"}</td>
                   <td className="p-3">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {/* Status change buttons */}
+                      <form action={updateStatus.bind(null, u.id, "VERIFIED")}>
+                        <button className="rounded-lg border border-emerald-900/15 px-2 py-1 text-xs hover:bg-emerald-50">
+                          Verify
+                        </button>
+                      </form>
+                      <form action={updateStatus.bind(null, u.id, "ACTIVE")}>
+                        <button className="rounded-lg border border-emerald-900/15 px-2 py-1 text-xs hover:bg-emerald-50">
+                          Active
+                        </button>
+                      </form>
+                      <form action={updateStatus.bind(null, u.id, "SUSPENDED")}>
+                        <button className="rounded-lg border border-amber-900/15 px-2 py-1 text-xs hover:bg-amber-50">
+                          Suspend
+                        </button>
+                      </form>
+                      
+                      {/* Existing actions */}
                       <form action={softDelete.bind(null, u.id)}>
-                        <button className="rounded-lg border border-emerald-900/15 px-3 py-1 hover:bg-emerald-50">Soft delete</button>
+                        <button className="rounded-lg border border-emerald-900/15 px-2 py-1 text-xs hover:bg-emerald-50">Soft delete</button>
                       </form>
                       <form action={hardDelete.bind(null, u.id)}>
-                        <button className="rounded-lg bg-rose-600 text-white px-3 py-1 hover:bg-rose-700">Hard delete</button>
+                        <button className="rounded-lg bg-rose-600 text-white px-2 py-1 text-xs hover:bg-rose-700">Hard delete</button>
                       </form>
                     </div>
                   </td>
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr><td className="p-4 text-emerald-900/70" colSpan={6}>No users yet.</td></tr>
+                <tr><td className="p-4 text-emerald-900/70" colSpan={7}>No users yet.</td></tr>
               )}
             </tbody>
           </table>

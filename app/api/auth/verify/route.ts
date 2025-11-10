@@ -11,8 +11,15 @@ export async function GET(req: Request) {
   const email = await consumeEmailVerificationToken(token);
   if (!email) return NextResponse.json({ error: "Invalid or expired token" }, { status: 400 });
 
-  const user = await prisma.user.update({ where: { email }, data: { emailVerified: new Date() } });
-  await logActivity({ userId: user.id, action: "AUTH_EMAIL_VERIFIED" });
+  const user = await prisma.user.update({ 
+    where: { email }, 
+    data: { 
+      emailVerified: new Date(),
+      status: "VERIFIED"
+    } 
+  });
+  
+  await logActivity({ userId: user.id, action: "AUTH_EMAIL_VERIFIED", details: "Status changed to VERIFIED" });
 
   return NextResponse.json({ ok: true });
 }

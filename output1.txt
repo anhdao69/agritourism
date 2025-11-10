@@ -1,0 +1,577 @@
+# Table of Contents
+- src/auth.ts
+- src/types/next-auth.d.ts
+- src/lib/prisma.ts
+- src/lib/permissions.ts
+- src/lib/tokens.ts
+- src/lib/rbac.ts
+- src/lib/activity.ts
+- src/lib/slugify.ts
+- src/lib/mail.ts
+
+## File: src/auth.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 4187 bytes
+- Created: 2025-11-10 14:33:43
+- Modified: 2025-11-10 13:27:09
+
+### Code
+
+```typescript
+// src/auth.ts
+import type { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { prisma } from "./lib/prisma";
+import bcrypt from "bcryptjs";
+import { logActivity } from "./lib/activity";
+import { getServerSession } from "next-auth";
+
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
+  session: { strategy: "jwt" },
+  // Using App Router pages, so no custom `pages` mapping necessary
+  providers: [
+    CredentialsProvider({
+      name: "Email & Password",
+      credentials: {
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(creds) {
+        const email = String(creds?.email ?? "").toLowerCase().trim();
+        const password = String(creds?.password ?? "");
+
+        if (!email || !password) {
+          throw new Error("CredentialsSignin");
+        }
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user || !user.passwordHash || user.deletedAt) {
+          throw new Error("CredentialsSignin");
+        }
+        if (!user.emailVerified) {
+          throw new Error("EMAIL_NOT_VERIFIED");
+        }
+
+        const ok = await bcrypt.compare(password, user.passwordHash);
+        if (!ok) throw new Error("CredentialsSignin");
+
+        // NextAuth requires an object with an `id` field and now also `role` for credentials.
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name ?? undefined,
+          image: user.image ?? undefined,
+          role: user.role, // Add the missing role property
+        };
+      },
+    }),
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          GoogleProvider({
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+          }),
+        ]
+      : []),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      // Ensure our custom fields always exist with safe defaults
+      // (helpful if your module augmentation marks them as non-optional)
+      if (token.id === undefined) token.id = "";
+      if (token.role === undefined) token.role = "VISITOR";
+      if (token.deletedAt === undefined) token.deletedAt = null;
+
+      // On initial sign-in, `user` is present. Sync with DB to get role/deletedAt.
+      if (user) {
+        const db = await prisma.user.findUnique({
+          where: { id: String((user as any).id) },
+          select: { id: true, role: true, deletedAt: true },
+        });
+
+        if (db) {
+          token.id = db.id; // string
+          token.role = db.role; // your Role enum
+          token.deletedAt = db.deletedAt ? db.deletedAt.toISOString() : null;
+        } else {
+          // Fallbacks if somehow user not found right after sign-in
+          token.id = token.id || String((user as any).id || "");
+          token.role = token.role || (user as any).role || "VISITOR";
+          token.deletedAt = token.deletedAt ?? null;
+        }
+      }
+
+      return token;
+    },
+    async session({ session, token }) {
+      // Only add fields if a user object exists
+      if (session.user) {
+        // These are safe because we set defaults in the JWT callback above
+        (session.user as any).id = token.id;
+        (session.user as any).role = token.role;
+        (session.user as any).deletedAt = token.deletedAt;
+      }
+      return session;
+    },
+    async signIn({ user }) {
+      // Best-effort: log if we have an id (string). Ignore otherwise.
+      const uid = (user as any)?.id ? String((user as any).id) : null;
+      await logActivity({ userId: uid, action: "AUTH_SIGN_IN" });
+      return true;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      const uid =
+        token && (token as any).id ? String((token as any).id) : null;
+      await logActivity({ userId: uid, action: "AUTH_SIGN_OUT" });
+    },
+  },
+  secret: process.env.NEXTAUTH_SECRET,
+};
+
+export async function auth() {
+  return getServerSession(authOptions);
+}
+```
+
+## File: src/types/next-auth.d.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 954 bytes
+- Created: 2025-11-10 09:24:59
+- Modified: 2025-09-17 14:04:05
+
+### Code
+
+```typescript
+// import NextAuth, { DefaultSession } from "next-auth";
+// import { Role } from "@prisma/client";
+
+// declare module "next-auth" {
+//   interface Session {
+//     user: DefaultSession["user"] & {
+//       id: string;
+//       role: Role;
+//       deletedAt?: string | null;
+//     };
+//   }
+//   interface User {
+//     role: Role;
+//   }
+// }
+
+// declare module "next-auth/jwt" {
+//   interface JWT {
+//     id?: string;
+//     role?: Role;
+//     deletedAt?: string | null;
+//   }
+// }
+
+
+// src/types/next-auth.d.ts
+import "next-auth";
+
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      email: string;
+      name?: string | null;
+      role: "VISITOR" | "OWNER" | "EDITOR" | "ADMIN";
+    };
+  }
+  interface User {
+    id: string;
+    role: "VISITOR" | "OWNER" | "EDITOR" | "ADMIN";
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    role: "VISITOR" | "OWNER" | "EDITOR" | "ADMIN";
+  }
+}
+
+```
+
+## File: src/lib/prisma.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 369 bytes
+- Created: 2025-11-10 09:24:59
+- Modified: 2025-09-05 15:38:58
+
+### Code
+
+```typescript
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+  });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
+```
+
+## File: src/lib/permissions.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 287 bytes
+- Created: 2025-11-10 09:24:59
+- Modified: 2025-09-08 11:29:05
+
+### Code
+
+```typescript
+import { Role, Listing } from "@prisma/client";
+
+export function canEditListing(user: { id: string; role: Role }, listing: Listing) {
+  if (user.role === "ADMIN" || user.role === "EDITOR") return true;
+  if (listing.ownerId && listing.ownerId === user.id) return true;
+  return false;
+}
+
+```
+
+## File: src/lib/tokens.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 1566 bytes
+- Created: 2025-11-10 09:24:59
+- Modified: 2025-09-05 15:39:16
+
+### Code
+
+```typescript
+import crypto from "crypto";
+import { prisma } from "./prisma";
+
+function makeToken() {
+  return crypto.randomBytes(32).toString("hex"); // URL-safe enough
+}
+
+export async function issueEmailVerificationToken(email: string) {
+  const token = makeToken();
+  const expires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24h
+  await prisma.emailVerificationToken.create({ data: { email, token, expires } });
+  return token;
+}
+
+export async function consumeEmailVerificationToken(token: string) {
+  const row = await prisma.emailVerificationToken.findUnique({ where: { token } });
+  if (!row || row.expires < new Date()) return null;
+  await prisma.emailVerificationToken.delete({ where: { token } });
+  return row.email;
+}
+
+export async function issuePasswordResetToken(email: string) {
+  const token = makeToken();
+  const expires = new Date(Date.now() + 1000 * 60 * 60 * 1); // 1h
+  await prisma.passwordResetToken.create({ data: { email, token, expires } });
+  return token;
+}
+
+export async function consumePasswordResetToken(token: string) {
+  const row = await prisma.passwordResetToken.findUnique({ where: { token } });
+  if (!row || row.expires < new Date()) return null;
+  await prisma.passwordResetToken.delete({ where: { token } });
+  return row.email;
+}
+
+export async function issueInviteToken(email: string, role: "VISITOR" | "OWNER" | "EDITOR" | "ADMIN") {
+  const token = makeToken();
+  const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7d
+  await prisma.inviteToken.create({ data: { email, role, token, expires } });
+  return token;
+}
+
+```
+
+## File: src/lib/rbac.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 232 bytes
+- Created: 2025-11-10 09:24:59
+- Modified: 2025-09-05 15:39:25
+
+### Code
+
+```typescript
+import type { Role } from "@prisma/client";
+
+const ORDER: Record<Role, number> = { VISITOR: 0, OWNER: 1, EDITOR: 2, ADMIN: 3 };
+
+export function hasRole(current: Role, required: Role) {
+  return ORDER[current] >= ORDER[required];
+}
+
+```
+
+## File: src/lib/activity.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 807 bytes
+- Created: 2025-11-10 09:24:59
+- Modified: 2025-09-08 11:33:12
+
+### Code
+
+```typescript
+import { headers } from "next/headers";
+import { prisma } from "./prisma";
+
+export async function logActivity(opts: {
+  userId?: string | null;
+  action: string;
+  details?: string | null;
+}) {
+  try {
+    // Next 15: headers() must be awaited; on older Next, await is a no-op.
+    const h = await headers();
+
+    const forwarded = h.get("x-forwarded-for") || "";
+    const real = h.get("x-real-ip") || "";
+    const ip = (forwarded || real).split(",")[0]?.trim() || null;
+    const ua = h.get("user-agent") || null;
+
+    await prisma.activityLog.create({
+      data: {
+        userId: opts.userId ?? null,
+        action: opts.action,
+        details: opts.details ?? null,
+        ip: ip ?? undefined,
+        userAgent: ua ?? undefined,
+      },
+    });
+  } catch {
+    // Never throw from logging
+  }
+}
+
+```
+
+## File: src/lib/slugify.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 152 bytes
+- Created: 2025-11-10 09:24:59
+- Modified: 2025-09-08 11:28:55
+
+### Code
+
+```typescript
+export function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+```
+
+## File: src/lib/mail.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 6775 bytes
+- Created: 2025-11-10 09:24:59
+- Modified: 2025-09-10 11:12:56
+
+### Code
+
+```typescript
+// src/lib/mail.ts
+import nodemailer from "nodemailer";
+
+/**
+ * SMTP → AWS SES (mirrors your Python example)
+ * Works great on Vercel/Node with STARTTLS (587).
+ */
+
+const APP_NAME = process.env.APP_NAME || "Agritourism Directory";
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").trim();
+
+const FROM_EMAIL = (process.env.SES_FROM_EMAIL || "").trim();
+const FROM_NAME = (process.env.SES_FROM_NAME || APP_NAME).trim();
+
+const SMTP_HOST = (process.env.AWS_SMTP_HOST || "email-smtp.us-east-1.amazonaws.com").trim();
+const SMTP_PORT = Number(process.env.AWS_SMTP_PORT || 587);
+const SMTP_USER = (process.env.AWS_SMTP_USER || "").trim();
+const SMTP_PASS = (process.env.AWS_SMTP_PASS || "").trim();
+
+if (!FROM_EMAIL) throw new Error("SES_FROM_EMAIL missing in env");
+if (!SMTP_USER || !SMTP_PASS) throw new Error("AWS_SMTP_USER / AWS_SMTP_PASS missing in env");
+
+export const mailer = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: false, // STARTTLS
+  auth: { user: SMTP_USER, pass: SMTP_PASS },
+  tls: { minVersion: "TLSv1.2" }, // good hygiene
+});
+
+function fromHeader() {
+  return `${FROM_NAME} <${FROM_EMAIL}>`;
+}
+
+/** Light HTML→text fallback so links remain visible in plain text */
+function htmlToText(html: string) {
+  return html
+    .replace(/<a[^>]*href="([^"]+)"[^>]*>.*?<\/a>/gi, "$1")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function send(to: string, subject: string, html: string, text?: string) {
+  await mailer.sendMail({
+    to,
+    from: fromHeader(),
+    subject,
+    html,
+    text: text || htmlToText(html),
+    replyTo: FROM_EMAIL,
+  });
+}
+
+/* ───────────────── Templates (match your Python) ───────────────── */
+
+function shell(title: string, bodyHtml: string) {
+  return `<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif; background-color: #f5f7fb; padding:24px; margin:0;">
+    <div style="max-width:600px; margin:0 auto; background:#ffffff; padding:24px; border-radius:8px;">
+      <h2 style="margin:0 0 12px; color:#111827;">${title}</h2>
+      ${bodyHtml}
+      <hr style="border:none; border-top:1px solid #e5e7eb; margin:24px 0;" />
+      <p style="margin:0; color:#9CA3AF;">— ${APP_NAME} Team</p>
+    </div>
+  </body>
+</html>`;
+}
+
+function resetBlock(resetLink: string) {
+  return `\
+<p style="margin:0 0 16px; color:#374151;">
+  We received a request to reset your password for <strong>${APP_NAME}</strong>.
+  Click the button below to set a new one:
+</p>
+<p style="text-align:center; margin:24px 0;">
+  <a href="${resetLink}"
+     style="background:#2563EB; color:#ffffff; text-decoration:none; padding:12px 20px; border-radius:6px; display:inline-block; font-weight:600;">
+    Reset Password
+  </a>
+</p>
+<p style="margin:0 0 8px; color:#6B7280;">If the button doesn’t work, paste this link into your browser:</p>
+<p style="word-break:break-all; color:#2563EB; margin:0 0 16px;">
+  <a href="${resetLink}" style="color:#2563EB; text-decoration:none;">${resetLink}</a>
+</p>
+<p style="margin:0; color:#9CA3AF;">If you didn’t request this, you can safely ignore this email.</p>`;
+}
+
+function verifyBlock(verifyLink: string) {
+  return `\
+<p style="margin:0 0 16px; color:#374151;">
+  Welcome to <strong>${APP_NAME}</strong>! Please confirm your email to finish setting up your account:
+</p>
+<p style="text-align:center; margin:24px 0;">
+  <a href="${verifyLink}"
+     style="background:#2563EB; color:#ffffff; text-decoration:none; padding:12px 20px; border-radius:6px; display:inline-block; font-weight:600;">
+    Verify Email
+  </a>
+</p>
+<p style="margin:0 0 8px; color:#6B7280;">If the button doesn’t work, paste this link into your browser:</p>
+<p style="word-break:break-all; color:#2563EB; margin:0 0 16px;">
+  <a href="${verifyLink}" style="color:#2563EB; text-decoration:none;">${verifyLink}</a>
+</p>`;
+}
+
+function inviteBlock(inviteLink: string) {
+  return `\
+<p style="margin:0 0 16px; color:#374151;">
+  You’ve been invited to join <strong>${APP_NAME}</strong>. Click below to accept and complete your account:
+</p>
+<p style="text-align:center; margin:24px 0;">
+  <a href="${inviteLink}"
+     style="background:#2563EB; color:#ffffff; text-decoration:none; padding:12px 20px; border-radius:6px; display:inline-block; font-weight:600;">
+    Accept Invite
+  </a>
+</p>
+<p style="margin:0 0 8px; color:#6B7280;">If the button doesn’t work, paste this link into your browser:</p>
+<p style="word-break:break-all; color:#2563EB; margin:0 0 16px;">
+  <a href="${inviteLink}" style="color:#2563EB; text-decoration:none;">${inviteLink}</a>
+</p>`;
+}
+
+function passwordSetBlock(loginLink: string) {
+  return `\
+<p style="margin:0 0 16px; color:#374151;">
+  Your password has been updated for <strong>${APP_NAME}</strong>. You can now log in:
+</p>
+<p style="text-align:center; margin:24px 0;">
+  <a href="${loginLink}"
+     style="background:#10B981; color:#ffffff; text-decoration:none; padding:12px 20px; border-radius:6px; display:inline-block; font-weight:600;">
+    Go to Login
+  </a>
+</p>
+<p style="margin:0 0 8px; color:#6B7280;">Or paste this link into your browser:</p>
+<p style="word-break:break-all; color:#2563EB; margin:0;">
+  <a href="${loginLink}" style="color:#2563EB; text-decoration:none;">${loginLink}</a>
+</p>`;
+}
+
+/* ───────────────── Public API used by your routes ───────────────── */
+
+export async function sendPasswordResetEmail(email: string, token: string) {
+  const link = `${APP_URL}/reset?token=${encodeURIComponent(token)}`;
+  const html = shell("Password Reset Request", resetBlock(link));
+  await send(email, "Reset Your Password", html);
+}
+
+export async function sendVerificationEmail(email: string, token: string) {
+  const link = `${APP_URL}/verify?token=${encodeURIComponent(token)}`;
+  const html = shell("Verify your email", verifyBlock(link));
+  await send(email, "Verify your email", html);
+}
+
+export async function sendInviteEmail(email: string, token: string) {
+  const link = `${APP_URL}/register?invite=${encodeURIComponent(token)}`;
+  const html = shell("You’re invited", inviteBlock(link));
+  await send(email, "You’re invited to join", html);
+}
+
+export async function sendPasswordUpdatedEmail(email: string) {
+  const link = `${APP_URL}/login`;
+  const html = shell("Password Updated Successfully", passwordSetBlock(link));
+  await send(email, "Your Password Has Been Updated", html);
+}
+
+/** Back-compat with older code paths */
+export async function sendMail(to: string, subject: string, html: string, text?: string) {
+  await send(to, subject, html, text);
+}
+
+```
+

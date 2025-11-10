@@ -14,8 +14,9 @@ export async function POST(req: Request) {
   const existing = await prisma.user.findUnique({ where: { email: normalized } });
   if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 400 });
 
-  // Resolve intended role
   let role: Role = "VISITOR";
+  let status = "PENDING";
+  
   if (invite) {
     const inv = await prisma.inviteToken.findUnique({ where: { token: String(invite) } });
     if (!inv || inv.expires < new Date() || inv.usedAt) {
@@ -26,13 +27,18 @@ export async function POST(req: Request) {
     }
     role = inv.role;
   } else if (String(as || "").toUpperCase() === "OWNER") {
-    // Allow self-register as OWNER (not EDITOR/ADMIN)
     role = "OWNER";
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { email: normalized, name: name || null, passwordHash, role },
+    data: { 
+      email: normalized, 
+      name: name || null, 
+      passwordHash, 
+      role,
+      status,
+    },
   });
 
   if (invite) {
@@ -42,9 +48,14 @@ export async function POST(req: Request) {
     });
   }
 
-  const token = await issueEmailVerificationToken(user.email);
-  await sendVerificationEmail(user.email, token);
-  await logActivity({ userId: user.id, action: "AUTH_REGISTER", details: role });
+  try {
+    const token = await issueEmailVerificationToken(user.email);
+    await sendVerificationEmail(user.email, token);
+    await logActivity({ userId: user.id, action: "AUTH_REGISTER", details: `${role} - PENDING verification` });
+  } catch (error) {
+    console.error("Failed to send verification email:", error);
+    await logActivity({ userId: user.id, action: "AUTH_REGISTER_EMAIL_FAILED", details: role });
+  }
 
   return NextResponse.json({ ok: true });
 }
