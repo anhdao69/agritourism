@@ -24,8 +24,11 @@ model User {
   role          Role      @default(VISITOR)
   image         String?
   deletedAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+
+  status UserStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   institution  String?
   personalLink String?

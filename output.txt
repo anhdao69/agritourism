@@ -8,6 +8,7 @@
 - app/admin/listings/page.tsx
 - app/admin/requests/page.tsx
 - app/admin/users/page.tsx
+- app/admin/users/create/page.tsx
 - app/admin/submissions/page.tsx
 - app/dashboard/sign-out-button.tsx
 - app/dashboard/page.tsx
@@ -27,9 +28,12 @@
 - app/api/listings/route.ts
 - app/api/listings/[id]/route.ts
 - app/api/admin/users/route.ts
+- app/api/admin/users/[id]/status/route.ts
 - app/api/admin/users/[id]/soft-delete/route.ts
 - app/api/admin/users/[id]/hard-delete/route.ts
+- app/api/admin/users/create/route.ts
 - app/api/requests/route.ts
+- app/api/profile/route.ts
 - app/api/submissions/route.ts
 - app/api/self-delete/route.ts
 - app/login/page.tsx
@@ -1135,7 +1139,7 @@ export default async function AdminListingsPage() {
 - Extension: .tsx
 - Language: typescript
 - Size: 4656 bytes
-- Created: 2025-11-10 16:30:37
+- Created: 2025-11-10 18:21:31
 - Modified: 2025-11-10 16:30:37
 
 ### Code
@@ -1245,15 +1249,16 @@ export default async function AdminRequestsPage() {
 
 - Extension: .tsx
 - Language: typescript
-- Size: 5469 bytes
-- Created: 2025-11-10 09:24:19
-- Modified: 2025-10-24 14:58:15
+- Size: 7898 bytes
+- Created: 2025-11-10 18:21:31
+- Modified: 2025-11-10 16:54:12
 
 ### Code
 
 ```typescript
 import { auth } from "@/auth";
 import { headers, cookies } from "next/headers";
+import Link from "next/link";
 
 async function apiFetch(path: string, init: RequestInit = {}) {
   const h = await headers();
@@ -1296,6 +1301,14 @@ export default async function AdminUsersPage() {
     await apiFetch(`/api/admin/users/${id}/hard-delete`, { method: "POST" });
   }
 
+  async function updateStatus(id: string, status: string) {
+    "use server";
+    await apiFetch(`/api/admin/users/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  }
+
   async function invite(formData: FormData) {
     "use server";
     const email = String(formData.get("email") || "");
@@ -1314,13 +1327,21 @@ export default async function AdminUsersPage() {
         <div className="absolute -right-24 -bottom-24 h-96 w-96 rounded-full bg-amber-200/30 blur-3xl" />
       </div>
 
-      <section className="mx-auto max-w-6xl p-6 sm:p-10">
-        <header className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-emerald-950">Admin · Users</h1>
-          <p className="text-sm text-emerald-900/70">Invite, soft-delete, or permanently remove users.</p>
+      <section className="mx-auto max-w-7xl p-6 sm:p-10">
+        <header className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-semibold text-emerald-950">Admin · Users</h1>
+            <p className="text-sm text-emerald-900/70">Invite, manage, soft-delete, or permanently remove users.</p>
+          </div>
+          <Link
+            href="/admin/users/create"
+            className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-medium shadow-sm hover:bg-emerald-700"
+          >
+            + Create User
+          </Link>
         </header>
 
-        <form action={invite} className="rounded-2xl border border-emerald-900/10 bg-white/70 p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row gap-3 sm:items-end">
+        <form action={invite} className="rounded-2xl border border-emerald-900/10 bg-white/70 p-4 sm:p-6 shadow-sm flex flex-col sm:flex-row gap-3 sm:items-end mb-6">
           <div className="flex-1">
             <label className="block text-sm font-medium text-emerald-950">Invite email</label>
             <input name="email" type="email" required className="mt-1 w-full rounded-xl border border-emerald-900/15 bg-white px-3 py-2 shadow-inner outline-none focus:border-emerald-600/40 focus:ring-1 focus:ring-emerald-600/20" placeholder="user@example.com" />
@@ -1337,13 +1358,14 @@ export default async function AdminUsersPage() {
           <button type="submit" className="rounded-xl bg-emerald-600 text-white px-4 py-2 shadow-sm hover:bg-emerald-700">Send invite</button>
         </form>
 
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-emerald-900/10 bg-white/70 shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-emerald-900/10 bg-white/70 shadow-sm">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b border-emerald-900/10">
                 <th className="p-3">Email</th>
                 <th className="p-3">Name</th>
                 <th className="p-3">Role</th>
+                <th className="p-3">Status</th>
                 <th className="p-3">Verified</th>
                 <th className="p-3">Deleted</th>
                 <th className="p-3">Actions</th>
@@ -1355,22 +1377,55 @@ export default async function AdminUsersPage() {
                   <td className="p-3">{u.email}</td>
                   <td className="p-3">{u.name || "—"}</td>
                   <td className="p-3">{u.role}</td>
+                  <td className="p-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium border ${
+                        u.status === "VERIFIED" || u.status === "ACTIVE"
+                          ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                          : u.status === "PENDING"
+                          ? "bg-amber-50 text-amber-800 border-amber-200"
+                          : u.status === "SUSPENDED"
+                          ? "bg-rose-50 text-rose-800 border-rose-200"
+                          : "bg-slate-50 text-slate-800 border-slate-200"
+                      }`}
+                    >
+                      {u.status || "PENDING"}
+                    </span>
+                  </td>
                   <td className="p-3">{u.emailVerified ? "Yes" : "No"}</td>
                   <td className="p-3">{u.deletedAt ? "Yes" : "No"}</td>
                   <td className="p-3">
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {/* Status change buttons */}
+                      <form action={updateStatus.bind(null, u.id, "VERIFIED")}>
+                        <button className="rounded-lg border border-emerald-900/15 px-2 py-1 text-xs hover:bg-emerald-50">
+                          Verify
+                        </button>
+                      </form>
+                      <form action={updateStatus.bind(null, u.id, "ACTIVE")}>
+                        <button className="rounded-lg border border-emerald-900/15 px-2 py-1 text-xs hover:bg-emerald-50">
+                          Active
+                        </button>
+                      </form>
+                      <form action={updateStatus.bind(null, u.id, "SUSPENDED")}>
+                        <button className="rounded-lg border border-amber-900/15 px-2 py-1 text-xs hover:bg-amber-50">
+                          Suspend
+                        </button>
+                      </form>
+                      
+                      {/* Existing actions */}
                       <form action={softDelete.bind(null, u.id)}>
-                        <button className="rounded-lg border border-emerald-900/15 px-3 py-1 hover:bg-emerald-50">Soft delete</button>
+                        <button className="rounded-lg border border-emerald-900/15 px-2 py-1 text-xs hover:bg-emerald-50">Soft delete</button>
                       </form>
                       <form action={hardDelete.bind(null, u.id)}>
-                        <button className="rounded-lg bg-rose-600 text-white px-3 py-1 hover:bg-rose-700">Hard delete</button>
+                        <button className="rounded-lg bg-rose-600 text-white px-2 py-1 text-xs hover:bg-rose-700">Hard delete</button>
                       </form>
                     </div>
                   </td>
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr><td className="p-4 text-emerald-900/70" colSpan={6}>No users yet.</td></tr>
+                <tr><td className="p-4 text-emerald-900/70" colSpan={7}>No users yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -1379,7 +1434,199 @@ export default async function AdminUsersPage() {
     </main>
   );
 }
+```
 
+## File: app/admin/users/create/page.tsx
+
+- Extension: .tsx
+- Language: typescript
+- Size: 6943 bytes
+- Created: 2025-11-10 16:53:32
+- Modified: 2025-11-10 16:53:32
+
+### Code
+
+```typescript
+"use client";
+
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export default function AdminCreateUserPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"VISITOR" | "OWNER" | "EDITOR" | "ADMIN">("VISITOR");
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(false);
+    setSubmitting(true);
+
+    try {
+      const res = await fetch("/api/admin/users/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name, password, role }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create user");
+      }
+
+      setSuccess(true);
+      setEmail("");
+      setName("");
+      setPassword("");
+      setRole("VISITOR");
+      
+      // Redirect to users page after a short delay
+      setTimeout(() => {
+        router.push("/admin/users");
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-white relative">
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute inset-0 bg-gradient-to-b from-emerald-50 via-white to-amber-50" />
+        <div className="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-emerald-200/30 blur-3xl" />
+        <div className="absolute -right-24 -bottom-24 h-96 w-96 rounded-full bg-amber-200/30 blur-3xl" />
+      </div>
+
+      <section className="mx-auto max-w-2xl p-6 sm:p-10">
+        <header className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-emerald-950">
+            Create New User
+          </h1>
+          <p className="text-sm text-emerald-900/70">
+            Create a user account without email verification. The user will be automatically verified.
+          </p>
+        </header>
+
+        {error && (
+          <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-950 px-4 py-3 mb-4 text-sm">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 px-4 py-3 mb-4 text-sm">
+            User created successfully! Redirecting...
+          </div>
+        )}
+
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-2xl border border-emerald-900/10 bg-white/70 p-6 shadow-sm space-y-5"
+        >
+          <div className="space-y-1.5">
+            <label htmlFor="email" className="block text-sm font-medium text-emerald-950">
+              Email *
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-xl border border-emerald-900/15 bg-white px-4 py-3 text-emerald-950 shadow-inner outline-none ring-emerald-600/20 placeholder:text-emerald-900/40 focus:border-emerald-600/40 focus:ring"
+              placeholder="user@example.com"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="name" className="block text-sm font-medium text-emerald-950">
+              Name
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-xl border border-emerald-900/15 bg-white px-4 py-3 text-emerald-950 shadow-inner outline-none ring-emerald-600/20 placeholder:text-emerald-900/40 focus:border-emerald-600/40 focus:ring"
+              placeholder="John Doe"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="block text-sm font-medium text-emerald-950">
+              Password *
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-emerald-900/15 bg-white px-4 py-3 text-emerald-950 shadow-inner outline-none ring-emerald-600/20 placeholder:text-emerald-900/40 focus:border-emerald-600/40 focus:ring pr-12"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-2 my-auto h-9 rounded-lg px-3 text-sm text-emerald-950/70 hover:bg-emerald-50"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+            <p className="text-xs text-emerald-900/60">
+              Minimum 8 characters
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="role" className="block text-sm font-medium text-emerald-950">
+              Role *
+            </label>
+            <select
+              id="role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as any)}
+              className="w-full rounded-xl border border-emerald-900/15 bg-white px-4 py-3 text-emerald-950 shadow-inner outline-none ring-emerald-600/20 focus:border-emerald-600/40 focus:ring"
+            >
+              <option value="VISITOR">Visitor</option>
+              <option value="OWNER">Owner</option>
+              <option value="EDITOR">Editor</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex-1 rounded-xl bg-emerald-600 text-white px-4 py-3 font-medium shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {submitting ? "Creating..." : "Create User"}
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/admin/users")}
+              className="rounded-xl border border-emerald-900/15 bg-white px-4 py-3 text-emerald-950 shadow-sm hover:bg-emerald-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+  );
+}
 ```
 
 ## File: app/admin/submissions/page.tsx
@@ -1685,9 +1932,9 @@ export default function SignOutButton() {
 
 - Extension: .tsx
 - Language: typescript
-- Size: 5514 bytes
-- Created: 2025-11-10 14:33:34
-- Modified: 2025-11-10 10:45:56
+- Size: 5727 bytes
+- Created: 2025-11-10 16:55:23
+- Modified: 2025-11-10 16:55:23
 
 ### Code
 
@@ -1786,6 +2033,12 @@ export default async function Dashboard() {
             value="Directory"
             hint="See what visitors see"
             href="/explore"
+          />
+          <Card
+            title="Account"
+            value={user.email}
+            hint="Update your profile and account details"
+            href="/profile"  // Changed from "/dashboard/profile"
           />
         </div>
 
@@ -2324,9 +2577,9 @@ export default function Logo({ withText = false }: { withText?: boolean }) {
 
 - Extension: .tsx
 - Language: typescript
-- Size: 4062 bytes
-- Created: 2025-11-10 10:32:37
-- Modified: 2025-11-10 10:32:37
+- Size: 4277 bytes
+- Created: 2025-11-10 16:57:11
+- Modified: 2025-11-10 16:57:11
 
 ### Code
 
@@ -2391,6 +2644,9 @@ export default function SiteHeader() {
             </>
           ) : (
             <>
+            <Link href="/profile" className="rounded-lg border border-emerald-900/15 bg-white px-3 py-2 text-xs font-medium text-emerald-900 shadow-sm hover:bg-emerald-50">
+              Profile
+            </Link>
               <Link href="/dashboard" className="rounded-lg border border-emerald-900/15 bg-white px-3 py-2 text-xs font-medium text-emerald-900 shadow-sm hover:bg-emerald-50">
                 Dashboard
               </Link>
@@ -2655,9 +2911,9 @@ export default function RegisterPage() {
 
 - Extension: .ts
 - Language: typescript
-- Size: 783 bytes
-- Created: 2025-11-10 09:24:19
-- Modified: 2025-09-05 15:43:49
+- Size: 874 bytes
+- Created: 2025-11-10 18:21:31
+- Modified: 2025-11-10 16:49:29
 
 ### Code
 
@@ -2675,12 +2931,18 @@ export async function GET(req: Request) {
   const email = await consumeEmailVerificationToken(token);
   if (!email) return NextResponse.json({ error: "Invalid or expired token" }, { status: 400 });
 
-  const user = await prisma.user.update({ where: { email }, data: { emailVerified: new Date() } });
-  await logActivity({ userId: user.id, action: "AUTH_EMAIL_VERIFIED" });
+  const user = await prisma.user.update({ 
+    where: { email }, 
+    data: { 
+      emailVerified: new Date(),
+      status: "VERIFIED"
+    } 
+  });
+  
+  await logActivity({ userId: user.id, action: "AUTH_EMAIL_VERIFIED", details: "Status changed to VERIFIED" });
 
   return NextResponse.json({ ok: true });
 }
-
 ```
 
 ## File: app/api/auth/reset/route.ts
@@ -2768,9 +3030,9 @@ export async function POST(req: Request) {
 
 - Extension: .ts
 - Language: typescript
-- Size: 1931 bytes
-- Created: 2025-11-10 09:24:19
-- Modified: 2025-09-08 11:24:35
+- Size: 2151 bytes
+- Created: 2025-11-10 18:21:31
+- Modified: 2025-11-10 16:49:39
 
 ### Code
 
@@ -2791,8 +3053,9 @@ export async function POST(req: Request) {
   const existing = await prisma.user.findUnique({ where: { email: normalized } });
   if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 400 });
 
-  // Resolve intended role
   let role: Role = "VISITOR";
+  let status = "PENDING";
+  
   if (invite) {
     const inv = await prisma.inviteToken.findUnique({ where: { token: String(invite) } });
     if (!inv || inv.expires < new Date() || inv.usedAt) {
@@ -2803,13 +3066,18 @@ export async function POST(req: Request) {
     }
     role = inv.role;
   } else if (String(as || "").toUpperCase() === "OWNER") {
-    // Allow self-register as OWNER (not EDITOR/ADMIN)
     role = "OWNER";
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { email: normalized, name: name || null, passwordHash, role },
+    data: { 
+      email: normalized, 
+      name: name || null, 
+      passwordHash, 
+      role,
+      status,
+    },
   });
 
   if (invite) {
@@ -2819,13 +3087,17 @@ export async function POST(req: Request) {
     });
   }
 
-  const token = await issueEmailVerificationToken(user.email);
-  await sendVerificationEmail(user.email, token);
-  await logActivity({ userId: user.id, action: "AUTH_REGISTER", details: role });
+  try {
+    const token = await issueEmailVerificationToken(user.email);
+    await sendVerificationEmail(user.email, token);
+    await logActivity({ userId: user.id, action: "AUTH_REGISTER", details: `${role} - PENDING verification` });
+  } catch (error) {
+    console.error("Failed to send verification email:", error);
+    await logActivity({ userId: user.id, action: "AUTH_REGISTER_EMAIL_FAILED", details: role });
+  }
 
   return NextResponse.json({ ok: true });
 }
-
 ```
 
 ## File: app/api/auth/[...nextauth]/route.ts
@@ -3095,6 +3367,64 @@ export async function POST(req: Request) {
 
 ```
 
+## File: app/api/admin/users/[id]/status/route.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 1494 bytes
+- Created: 2025-11-10 16:51:39
+- Modified: 2025-11-10 16:51:39
+
+### Code
+
+```typescript
+// app/api/admin/users/[id]/status/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { hasRole } from "@/lib/rbac";
+import { logActivity } from "@/lib/activity";
+
+export async function PATCH(req: Request, context: unknown) {
+  const { params } = context as { params: { id: string } };
+  
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  
+  if (!hasRole((session.user as any).role, "ADMIN")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const { status } = await req.json();
+    
+    const validStatuses = ["PENDING", "VERIFIED", "ACTIVE", "SUSPENDED", "DELETED"];
+    if (!status || !validStatuses.includes(status)) {
+      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: params.id },
+      data: { status },
+    });
+
+    await logActivity({
+      userId: (session.user as any).id,
+      action: "ADMIN_UPDATE_USER_STATUS",
+      details: `Changed status of ${user.email} to ${status}`,
+    });
+
+    return NextResponse.json({ ok: true, user });
+  } catch (error) {
+    console.error("Error updating user status:", error);
+    return NextResponse.json({ error: "Failed to update status" }, { status: 500 });
+  }
+}
+```
+
 ## File: app/api/admin/users/[id]/soft-delete/route.ts
 
 - Extension: .ts
@@ -3175,6 +3505,89 @@ export async function POST(_req: Request, context: unknown) {
   return NextResponse.json({ ok: true });
 }
 
+```
+
+## File: app/api/admin/users/create/route.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 2146 bytes
+- Created: 2025-11-10 16:51:01
+- Modified: 2025-11-10 16:51:01
+
+### Code
+
+```typescript
+// app/api/admin/users/create/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { hasRole } from "@/lib/rbac";
+import bcrypt from "bcryptjs";
+import { logActivity } from "@/lib/activity";
+
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  
+  if (!hasRole((session.user as any).role, "ADMIN")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const { email, name, password, role } = await req.json();
+    
+    if (!email || !password) {
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+    }
+
+    const normalized = String(email).toLowerCase().trim();
+    
+    // Check if user already exists
+    const existing = await prisma.user.findUnique({ where: { email: normalized } });
+    if (existing) {
+      return NextResponse.json({ error: "Email already in use" }, { status: 400 });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create user with VERIFIED status and emailVerified set
+    const user = await prisma.user.create({
+      data: {
+        email: normalized,
+        name: name || null,
+        passwordHash,
+        role: role || "VISITOR",
+        status: "VERIFIED",
+        emailVerified: new Date(), // Admin-created users are automatically verified
+      },
+    });
+
+    await logActivity({
+      userId: (session.user as any).id,
+      action: "ADMIN_CREATE_USER",
+      details: `Created user ${user.email} with role ${user.role}`,
+    });
+
+    return NextResponse.json({ 
+      ok: true, 
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        status: user.status,
+      }
+    });
+  } catch (error: any) {
+    console.error("Error creating user:", error);
+    return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+  }
+}
 ```
 
 ## File: app/api/requests/route.ts
@@ -3311,6 +3724,101 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ok: true, request: all[idx] });
 }
 
+```
+
+## File: app/api/profile/route.ts
+
+- Extension: .ts
+- Language: typescript
+- Size: 2315 bytes
+- Created: 2025-11-10 16:52:09
+- Modified: 2025-11-10 16:52:09
+
+### Code
+
+```typescript
+// app/api/profile/route.ts
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/lib/activity";
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: (session.user as any).id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        institution: true,
+        personalLink: true,
+        bio: true,
+        emailVerified: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ user });
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    return NextResponse.json({ error: "Failed to fetch profile" }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { name, institution, personalLink, bio } = await req.json();
+
+    const user = await prisma.user.update({
+      where: { id: (session.user as any).id },
+      data: {
+        name: name !== undefined ? name : undefined,
+        institution: institution !== undefined ? institution : undefined,
+        personalLink: personalLink !== undefined ? personalLink : undefined,
+        bio: bio !== undefined ? bio : undefined,
+      },
+    });
+
+    await logActivity({
+      userId: user.id,
+      action: "PROFILE_UPDATE",
+      details: "Updated profile information",
+    });
+
+    return NextResponse.json({ 
+      ok: true, 
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        institution: user.institution,
+        personalLink: user.personalLink,
+        bio: user.bio,
+      }
+    });
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    return NextResponse.json({ error: "Failed to update profile" }, { status: 500 });
+  }
+}
 ```
 
 ## File: app/api/submissions/route.ts
