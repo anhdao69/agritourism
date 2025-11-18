@@ -72,7 +72,7 @@ export default function ProfilePage() {
         throw new Error(data.error || "Failed to update profile");
       }
       
-      setUser(data.user); // Update local state with new data
+      setUser(data.user); 
       setSuccess("Profile updated successfully!");
     } catch (err: any) {
       setError(err.message);
