@@ -697,12 +697,35 @@ async def analyze(request: AnalysisRequest):
         )
 
         # ============================================================
-        # === SAVE TO EXCEL WITH TITLES ==============================
+        # === SAVE TO EXCEL WITH TITLES & SAVE TO CSV ================
         # ============================================================
 
         transition_path = os.path.join(results_dir, "NLCD_Transition_Tables.xlsx")
-        print(f"Saving transition tables to {transition_path}")
+        print(f"Saving transition tables to {transition_path} and CSVs")
 
+        # Save to CSVs with "ExcelName_SheetName.csv" convention
+        transition_matrix_lbl.to_csv(
+            os.path.join(results_dir, "NLCD_Transition_Tables_Original_Counts.csv"),
+            index=True,
+        )
+        transition_percent_lbl.to_csv(
+            os.path.join(results_dir, "NLCD_Transition_Tables_Original_Percent.csv"),
+            index=True,
+        )
+        transition_matrix_reclass_lbl.to_csv(
+            os.path.join(results_dir, "NLCD_Transition_Tables_Reclass_Counts.csv"),
+            index=True,
+        )
+        transition_percent_reclass_lbl.to_csv(
+            os.path.join(results_dir, "NLCD_Transition_Tables_Reclass_Percent.csv"),
+            index=True,
+        )
+        df_reclass_long.to_csv(
+            os.path.join(results_dir, "NLCD_Transition_Tables_Reclass_Transitions.csv"),
+            index=False,
+        )
+
+        # Save to Excel
         with pd.ExcelWriter(transition_path, engine="xlsxwriter") as writer:
             write_excel_with_title(
                 writer,
@@ -766,10 +789,24 @@ async def analyze(request: AnalysisRequest):
         )
 
         norm_path = os.path.join(results_dir, "NLCD_Normalized_Ranked.xlsx")
-        print(f"Saving normalized/ranked results to {norm_path}")
+        print(f"Saving normalized/ranked results to {norm_path} and CSVs")
 
         with pd.ExcelWriter(norm_path, engine="xlsxwriter") as writer:
             if norm_orig is not None:
+                # CSV
+                norm_orig.to_csv(
+                    os.path.join(
+                        results_dir, "NLCD_Normalized_Ranked_Norm_Original.csv"
+                    ),
+                    index=True,
+                )
+                rank_orig.to_csv(
+                    os.path.join(
+                        results_dir, "NLCD_Normalized_Ranked_Rank_Original.csv"
+                    ),
+                    index=False,
+                )
+                # Excel
                 write_excel_with_title(
                     writer,
                     norm_orig,
@@ -788,6 +825,20 @@ async def analyze(request: AnalysisRequest):
                 )
 
             if norm_re is not None:
+                # CSV
+                norm_re.to_csv(
+                    os.path.join(
+                        results_dir, "NLCD_Normalized_Ranked_Norm_Reclass.csv"
+                    ),
+                    index=True,
+                )
+                rank_re.to_csv(
+                    os.path.join(
+                        results_dir, "NLCD_Normalized_Ranked_Rank_Reclass.csv"
+                    ),
+                    index=False,
+                )
+                # Excel
                 write_excel_with_title(
                     writer,
                     norm_re,
@@ -838,8 +889,31 @@ async def analyze(request: AnalysisRequest):
         ]
 
         chi_path = os.path.join(results_dir, "NLCD_ChiSquare_Results.xlsx")
-        print(f"Saving chi-square results to {chi_path}")
+        print(f"Saving chi-square results to {chi_path} and CSVs")
 
+        # Save to CSVs
+        chi_orig["expected"].to_csv(
+            os.path.join(results_dir, "NLCD_ChiSquare_Results_Expected_Original.csv"),
+            index=True,
+        )
+        chi_orig["summary"].to_csv(
+            os.path.join(results_dir, "NLCD_ChiSquare_Results_Summary_Original.csv"),
+            index=False,
+        )
+        chi_re["expected"].to_csv(
+            os.path.join(results_dir, "NLCD_ChiSquare_Results_Expected_Reclass.csv"),
+            index=True,
+        )
+        chi_re["summary"].to_csv(
+            os.path.join(results_dir, "NLCD_ChiSquare_Results_Summary_Reclass.csv"),
+            index=False,
+        )
+        summary_re2.to_csv(
+            os.path.join(results_dir, "NLCD_ChiSquare_Results_Summary_Reclass_2.csv"),
+            index=False,
+        )
+
+        # Save to Excel
         with pd.ExcelWriter(chi_path, engine="xlsxwriter") as writer:
             write_excel_with_title(
                 writer,
@@ -972,8 +1046,37 @@ async def analyze(request: AnalysisRequest):
         ]
 
         intensity_path = os.path.join(results_dir, "NLCD_Intensity_Analysis.xlsx")
-        print(f"Saving intensity analysis to {intensity_path}")
+        print(f"Saving intensity analysis to {intensity_path} and CSVs")
 
+        # Save to CSVs
+        gain_o.to_csv(
+            os.path.join(results_dir, "NLCD_Intensity_Analysis_Gain_Original.csv"),
+            index=False,
+        )
+        loss_o.to_csv(
+            os.path.join(results_dir, "NLCD_Intensity_Analysis_Loss_Original.csv"),
+            index=False,
+        )
+        trans_o.to_csv(
+            os.path.join(
+                results_dir, "NLCD_Intensity_Analysis_Transition_Original.csv"
+            ),
+            index=False,
+        )
+        gain_r.to_csv(
+            os.path.join(results_dir, "NLCD_Intensity_Analysis_Gain_Reclass.csv"),
+            index=False,
+        )
+        loss_r.to_csv(
+            os.path.join(results_dir, "NLCD_Intensity_Analysis_Loss_Reclass.csv"),
+            index=False,
+        )
+        trans_r.to_csv(
+            os.path.join(results_dir, "NLCD_Intensity_Analysis_Transition_Reclass.csv"),
+            index=False,
+        )
+
+        # Save to Excel
         with pd.ExcelWriter(intensity_path, engine="xlsxwriter") as writer:
             write_excel_with_title(
                 writer,
