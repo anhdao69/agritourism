@@ -67,6 +67,18 @@ function AnalysisPageContent() {
     setAnalysisState({ status: "idle", message: "", downloadUrl: null });
   };
 
+    const goToVegetationForm = () => {
+    // Build querystring so the vegetation form knows which project/years
+    const params = new URLSearchParams();
+    if (ombilSiteId) params.set("ombilSiteId", ombilSiteId);
+    if (year1) params.set("year1", year1);
+    if (year2) params.set("year2", year2);
+
+    const qs = params.toString();
+    router.push(`/form-veget${qs ? `?${qs}` : ""}`);
+  };
+
+
   const handleSubmit = async () => {
     if (!geojson) {
       setAnalysisState({
@@ -356,7 +368,22 @@ function AnalysisPageContent() {
               Download Results (ZIP)
             </button>
           )}
+
+          {/* NEW: Next button to vegetation form */}
+          <button
+            type="button"
+            onClick={goToVegetationForm}
+            disabled={analysisState.status !== "success"}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold shadow-lg transition ${
+              analysisState.status !== "success"
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-xl"
+            }`}
+          >
+            Next: Vegetation Form
+          </button>
         </div>
+
 
         {/* Output Description */}
         <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
