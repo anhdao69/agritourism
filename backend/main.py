@@ -1300,9 +1300,10 @@ async def analyze(request: AnalysisRequest):
                         )
 
                     ax.set_title(
-                        f"Transition to {LC_NAMES[target]} ({year1}–{year2})",
-                        fontsize=14,
+                        f"Land Cover Type Transition from Various Types to Land Use Type -  {LC_NAMES[target]} ({year1}–{year2})",
+                        fontsize=16,
                     )
+
                     ax.axis("off")
 
                     plt.tight_layout()
