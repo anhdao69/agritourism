@@ -1,3 +1,4 @@
+// app/components/site/header.tsx
 "use client";
 
 import Link from "next/link";
@@ -15,75 +16,72 @@ export default function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/90 backdrop-blur">
-      <Container className="flex h-14 items-center gap-3">
+      <Container className="flex h-14 items-center justify-between">
         {/* Brand */}
         <Link href="/" className="group flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5 text-green-700" fill="currentColor" aria-hidden>
-              <path d="M12 2a1 1 0 0 1 1 1v2.05c2.89.49 5.5 2.93 6.4 6.2.22.8-1.03 1.26-1.38.5-.98-2.04-2.86-3.74-5.02-4.13V21a1 1 0 1 1-2 0V7.62C8.38 8 6.5 9.7 5.62 11.75c-.33.76-1.6.31-1.38-.5.92-3.29 3.53-5.72 6.4-6.2V3a1 1 0 0 1 1-1Z" />
-            </svg>
-            <span className="text-sm font-semibold text-slate-900">Local Food Directories</span>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded bg-green-700 flex items-center justify-center text-white font-bold text-xs">
+              LC
+            </div>
+            <span className="text-sm font-bold tracking-tight text-slate-900">
+              LandCover<span className="text-green-700">AI</span>
+            </span>
           </div>
         </Link>
 
-        {/* Primary nav (visible on all sizes) */}
-        <nav className="ml-3 flex items-center gap-4 text-xs">
-          <Link href="/#directories" className="text-slate-600 hover:text-slate-900">Directories</Link>
-          <Link href="/#data" className="text-slate-600 hover:text-slate-900">Data Sharing</Link>
-          <Link href="/#contact" className="text-slate-600 hover:text-slate-900">Contact</Link>
-          <Link href="/explore" className="text-slate-600 hover:text-slate-900">Explore</Link>
-          <Link href="/owner" className="text-slate-600 hover:text-slate-900">Owner</Link>
-          
-          {/* Select Project / Analysis Button - Highlighted */}
-          <Link 
-            href="/select-project" 
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 font-medium hover:bg-emerald-200 transition"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-            Analysis
-          </Link>
-
-          {isStaff && (
-            <div className="relative group">
-              <button className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900">Admin <span aria-hidden>▾</span></button>
-              <div className="invisible absolute left-0 mt-2 w-44 rounded-lg border border-slate-200 bg-white p-2 text-xs shadow-lg group-hover:visible">
-                <Link href="/admin/users" className="block rounded-md px-2 py-1.5 text-slate-700 hover:bg-slate-50">Users</Link>
-                <Link href="/admin/listings" className="block rounded-md px-2 py-1.5 text-slate-700 hover:bg-slate-50">Listings</Link>
-                <Link href="/admin/submissions" className="block rounded-md px-2 py-1.5 text-slate-700 hover:bg-slate-50">Submissions</Link>
-              </div>
-            </div>
-          )}
-        </nav>
-
-        {/* Right side CTAs (never hidden) */}
-        <div className="ml-auto flex items-center gap-2">
-          {!user ? (
-            <>
-              <Link href="/login" className="rounded-lg border border-green-700 bg-white px-3 py-2 text-xs font-semibold text-green-800 shadow-sm transition hover:bg-green-50">
-                Sign in
-              </Link>
-              <Link href="/register" className="rounded-lg border border-green-700 bg-green-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-green-800">
-                Sign up
-              </Link>
-            </>
-          ) : (
-            <>
-            <Link href="/profile" className="rounded-lg border border-emerald-900/15 bg-white px-3 py-2 text-xs font-medium text-emerald-900 shadow-sm hover:bg-emerald-50">
-              Profile
+        {/* Right side: Nav & Auth */}
+        <div className="flex items-center gap-4">
+          {/* Primary Nav */}
+          <nav className="flex items-center gap-4 text-sm font-medium">
+            <Link 
+              href="/select-project" 
+              className="text-slate-600 hover:text-green-700 transition"
+            >
+              Analysis
             </Link>
-              <Link href="/dashboard" className="rounded-lg border border-emerald-900/15 bg-white px-3 py-2 text-xs font-medium text-emerald-900 shadow-sm hover:bg-emerald-50">
-                Dashboard
-              </Link>
-              <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700"
+
+            {isStaff && (
+              <div className="relative group">
+                <button className="flex items-center gap-1 text-slate-600 hover:text-green-700 transition">
+                  Admin <span aria-hidden className="text-xs">▾</span>
+                </button>
+                <div className="invisible absolute right-0 mt-2 w-40 rounded-lg border border-slate-200 bg-white p-1 text-xs shadow-lg group-hover:visible origin-top-right transition-all">
+                  <Link href="/admin/users" className="block rounded-md px-3 py-2 text-slate-700 hover:bg-slate-50">Users</Link>
+                  <Link href="/admin/listings" className="block rounded-md px-3 py-2 text-slate-700 hover:bg-slate-50">Listings</Link>
+                  <Link href="/admin/submissions" className="block rounded-md px-3 py-2 text-slate-700 hover:bg-slate-50">Submissions</Link>
+                </div>
+              </div>
+            )}
+          </nav>
+
+          <div className="h-4 w-px bg-slate-200" aria-hidden />
+
+          {/* Auth Buttons */}
+          <div className="flex items-center gap-2">
+            {!user ? (
+              <Link
+                href="/login"
+                className="rounded-lg bg-green-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-green-800"
               >
-                Sign out
-              </button>
-            </>
-          )}
+                Login
+              </Link>
+            ) : (
+              <>
+                <Link 
+                  href="/dashboard" 
+                  className="hidden sm:block text-xs font-medium text-slate-600 hover:text-green-700"
+                >
+                  Dashboard
+                </Link>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  Sign out
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </Container>
     </header>
