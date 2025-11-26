@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import "leaflet/dist/leaflet.css";
-// Import leaflet-draw styles
 import "leaflet-draw/dist/leaflet.draw.css"; 
 import { MapContainer, TileLayer, FeatureGroup, useMap } from "react-leaflet";
 import { EditControl } from "react-leaflet-draw";
@@ -10,11 +9,11 @@ import parseGeoraster from "georaster";
 import GeoRasterLayer from "georaster-layer-for-leaflet";
 import proj4 from "proj4";
 
-// ---- FIX: use an `any` view for defs lookups/calls ----
+// ---- Proj4 Definitions ----
 const proj4Any = proj4 as unknown as {
-  defs: any; // allow index + call form
+  defs: any; 
 };
-// expose proj4
+
 if (typeof window !== "undefined") {
   (window as any).proj4 = proj4Any;
   if (!proj4Any.defs["EPSG:5070"]) {
@@ -37,7 +36,7 @@ if (typeof window !== "undefined") {
   }
 }
 
-// --- NEW TYPE: The component will now handle GeoJSON objects ---
+// --- Types ---
 type GeoJSONValue = object | null;
 
 interface OpenLayersFieldProps {
@@ -47,8 +46,8 @@ interface OpenLayersFieldProps {
     defaultCenter?: [number, number]; // [lon, lat]
     defaultZoom?: number;
   };
-  value: GeoJSONValue; // Changed from LatLng
-  onChange: (value: GeoJSONValue) => void; // Changed from (LatLng) => void
+  value: GeoJSONValue;
+  onChange: (value: GeoJSONValue) => void;
   disabled: boolean;
   tifUrl?: string;
 }
@@ -63,6 +62,7 @@ const DefaultIcon = new L.Icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// --- GeoTiff Overlay Component ---
 function GeoTiffOverlay({
   url,
   opacity,
@@ -76,6 +76,7 @@ function GeoTiffOverlay({
 }) {
   const map = useMap();
   const layerRef = useRef<GeoRasterLayer<any> | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -85,19 +86,24 @@ function GeoTiffOverlay({
         const ab = await res.arrayBuffer();
         const georaster = await parseGeoraster(ab);
         const layer = new GeoRasterLayer({ georaster, opacity, resolution: 256 });
+        
         if (cancelled) return;
+        
         layer.addTo(map);
         layerRef.current = layer;
+        
         const bounds = layer.getBounds();
         if (bounds?.isValid()) {
           map.fitBounds(bounds, { padding: [40, 40] });
         }
+        
         onLoaded?.(bounds);
       } catch (e: any) {
         console.error("GeoTIFF load error:", e);
         onError?.(e?.message ?? "Failed to load GeoTIFF.");
       }
     })();
+
     return () => {
       cancelled = true;
       if (layerRef.current) {
@@ -105,14 +111,17 @@ function GeoTiffOverlay({
         layerRef.current = null;
       }
     };
-  }, [url, map, onLoaded, onError]);
+  }, [url, map, onLoaded, onError]); // Dependencies include handlers
+
+  // Update opacity without reloading layer
   useEffect(() => {
     if (layerRef.current) layerRef.current.setOpacity(opacity);
   }, [opacity]);
+
   return null;
 }
 
-// Invalidate size when height changes (so tiles reflow)
+// Invalidate size when height changes
 function InvalidateOnResize({ nonce }: { nonce: number }) {
   const map = useMap();
   useEffect(() => {
@@ -121,7 +130,7 @@ function InvalidateOnResize({ nonce }: { nonce: number }) {
   return null;
 }
 
-// Component to handle clearing layers from outside the map
+// Component to handle clearing layers from outside
 function LayerClearer({ 
   shouldClear, 
   onCleared,
@@ -155,6 +164,7 @@ export default function DynamicOpenLayersField({
   const [opacity, setOpacity] = useState(0.7);
   const [expanded, setExpanded] = useState(true);
   const [shouldClearLayers, setShouldClearLayers] = useState(false);
+  
   const heightPx = expanded ? "70vh" : "400px";
   const sizeNonce = expanded ? 1 : 0;
   
@@ -167,7 +177,19 @@ export default function DynamicOpenLayersField({
 
   const initialZoom = field.defaultZoom ?? 11;
 
-  // --- Download GeoJSON ---
+  // --- FIX: Memoized Handlers for GeoTiffOverlay ---
+  // These ensure the GeoTiffOverlay useEffect doesn't re-run when opacity changes
+  const handleTifLoaded = useCallback(() => {
+    setLoadingTif(false);
+    setTifError(null);
+  }, []);
+
+  const handleTifError = useCallback((msg: string) => {
+    setTifError(msg || "Failed to load GeoTIFF");
+    setLoadingTif(false);
+  }, []);
+
+  // --- Actions ---
   const handleExport = () => {
     if (!value) {
       alert("No polygon to export.");
@@ -190,24 +212,19 @@ export default function DynamicOpenLayersField({
     }
   };
 
-  // --- Delete/Clear Polygon ---
   const handleDelete = useCallback(() => {
-    // Clear the value in the parent form
     onChange(null);
-    // Trigger layer clearing in the map
     setShouldClearLayers(true);
   }, [onChange]);
 
-  // Callback when layers are cleared
   const handleLayersCleared = useCallback(() => {
     setShouldClearLayers(false);
   }, []);
 
-  // --- Drawing Event Handlers ---
+  // --- Leaflet Draw Handlers ---
   const onCreated = (e: any) => {
     if (disabled) return;
     
-    // Clear any existing layers first (only allow one polygon at a time)
     if (featureGroupRef.current) {
       featureGroupRef.current.clearLayers();
     }
@@ -216,7 +233,6 @@ export default function DynamicOpenLayersField({
     const geoJson = layer.toGeoJSON();
     onChange(geoJson);
 
-    // Add the new layer to the feature group (so it can be edited/deleted)
     if (featureGroupRef.current) {
       featureGroupRef.current.addLayer(layer);
     }
@@ -226,7 +242,6 @@ export default function DynamicOpenLayersField({
     if (disabled) return;
     const layers = e.layers;
     
-    // Get the first (and should be only) layer
     let editedGeoJson: object | null = null;
     layers.eachLayer((layer: any) => {
       editedGeoJson = layer.toGeoJSON();
@@ -239,13 +254,10 @@ export default function DynamicOpenLayersField({
 
   const onDeleted = (e: any) => {
     if (disabled) return;
-    // When polygon is deleted via the map control, clear the value
     onChange(null);
   };
 
   const fileLabel = tifUrl.split("/").pop() || "map.tif";
-
-  // Check if there's a polygon
   const hasPolygon = value !== null;
 
   return (
@@ -309,13 +321,11 @@ export default function DynamicOpenLayersField({
           <span className="ml-2 text-emerald-700">{Math.round(opacity * 100)}%</span>
         </label>
         
-        {/* Export Button */}
         <button
           type="button"
           onClick={handleExport}
           disabled={!hasPolygon || disabled}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-sm text-emerald-800 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          title="Export polygon as GeoJSON"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -323,13 +333,11 @@ export default function DynamicOpenLayersField({
           Export GeoJSON
         </button>
         
-        {/* Delete Button */}
         <button
           type="button"
           onClick={handleDelete}
           disabled={!hasPolygon || disabled}
           className="inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          title="Delete polygon"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -355,20 +363,14 @@ export default function DynamicOpenLayersField({
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          
           <GeoTiffOverlay
             url={tifUrl}
             opacity={opacity}
-            onLoaded={() => {
-              setLoadingTif(false);
-              setTifError(null);
-            }}
-            onError={(msg) => {
-              setTifError(msg || "Failed to load GeoTIFF");
-              setLoadingTif(false);
-            }}
+            onLoaded={handleTifLoaded}
+            onError={handleTifError}
           />
 
-          {/* Drawing Controls */}
           <FeatureGroup ref={featureGroupRef}>
             {!disabled && (
               <EditControl
@@ -400,7 +402,6 @@ export default function DynamicOpenLayersField({
             )}
           </FeatureGroup>
 
-          {/* Layer clearer component */}
           <LayerClearer 
             shouldClear={shouldClearLayers} 
             onCleared={handleLayersCleared}
@@ -408,13 +409,11 @@ export default function DynamicOpenLayersField({
           />
         </MapContainer>
 
-        {/* Floating Delete Button on Map (when polygon exists) */}
         {hasPolygon && !disabled && (
           <button
             type="button"
             onClick={handleDelete}
             className="absolute bottom-4 right-4 z-[1000] flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-lg shadow-lg hover:bg-rose-700 transition font-medium"
-            title="Delete polygon"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -424,7 +423,6 @@ export default function DynamicOpenLayersField({
         )}
       </div>
 
-      {/* Instructions */}
       <div className="mt-2 text-xs text-emerald-700">
         <p>
           <strong>Draw:</strong> Click the polygon tool (◇) in the top-right corner to draw.
