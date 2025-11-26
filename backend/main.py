@@ -1,6 +1,5 @@
 """
 FastAPI Backend for Land Cover Change Analysis with Fragstats Integration
-
 To run:
     pip install fastapi uvicorn rasterio geopandas numpy pandas scipy xlsxwriter matplotlib contextily rpy2
     uvicorn main:app --host 0.0.0.0 --port 8000
@@ -14,12 +13,11 @@ import tempfile
 import zipfile
 from datetime import datetime
 from typing import Any, Dict, List
-
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 import rasterio
-import rasterio.warp  # <--- ADDED THIS IMPORT
+import rasterio.warp
 from rasterio.mask import mask
 from rasterio.transform import array_bounds
 from scipy.stats import chi2_contingency
@@ -31,7 +29,6 @@ from pydantic import BaseModel
 # ============================================================
 # === IMPORTS: VISUALIZATION & RPY2 ==========================
 # ============================================================
-
 try:
     import matplotlib
 
@@ -65,7 +62,6 @@ except ImportError:
 # ============================================================
 # === SETUP ==================================================
 # ============================================================
-
 app = FastAPI(
     title="Land Cover Analysis API",
     description="Analyze NLCD land cover changes and Fragstats metrics",
@@ -85,7 +81,6 @@ BASE_PATH = "/Users/hoanganh692004/Desktop/geojson"
 # ============================================================
 # === DICTIONARIES & CONFIGS =================================
 # ============================================================
-
 NLCD_LABELS = {
     11: "11-water",
     12: "12-ice_snow",
@@ -185,8 +180,6 @@ class AnalysisRequest(BaseModel):
 # ============================================================
 # === HELPER FUNCTIONS =======================================
 # ============================================================
-
-
 def get_tif_path(year: int) -> str:
     path = os.path.join(
         BASE_PATH,
@@ -244,7 +237,6 @@ def normalize_and_rank(
     total_changed = tm.sum().sum()
     if total_changed == 0:
         return None, None
-
     change_pct = ((tm / total_changed) * 100).round(2)
     from_colname = "From"
     change_pct = change_pct.rename_axis(from_colname)
@@ -257,7 +249,6 @@ def normalize_and_rank(
         bins=[0, 1, 10, 25, 100],
         labels=["Very Low", "Low", "Moderate", "High"],
     )
-
     norm_labeled = change_pct.copy()
     if use_nlcd_labels:
         norm_labeled.index = [
@@ -273,7 +264,6 @@ def normalize_and_rank(
         norm_labeled.columns = [
             RECLASS_LABELS.get(int(x), "0-empty") for x in change_pct.columns
         ]
-
     if use_nlcd_labels:
         flat["From_description"] = flat[from_colname].apply(
             lambda x: NLCD_LABELS.get(int(x), "0-empty")
@@ -288,12 +278,10 @@ def normalize_and_rank(
         flat["To_description"] = flat["To"].apply(
             lambda x: RECLASS_LABELS.get(int(x), "0-empty")
         )
-
     if use_nlcd_labels or use_reclass_labels:
         flat["Label"] = flat.apply(
             lambda r: f"{r['From_description']} to {r['To_description']}", axis=1
         )
-
     return norm_labeled, flat
 
 
@@ -302,7 +290,6 @@ def chi_square_summary(
 ):
     chi2, p, dof, exp = chi2_contingency(tm.values)
     exp_df = pd.DataFrame(exp, index=tm.index, columns=tm.columns).round(2)
-
     if use_nlcd_labels:
         exp_df.index = [NLCD_LABELS.get(int(i), f"{i}-unknown") for i in exp_df.index]
         exp_df.columns = [
@@ -315,17 +302,14 @@ def chi_square_summary(
         exp_df.columns = [
             RECLASS_LABELS.get(int(j), f"{j}-unknown") for j in exp_df.columns
         ]
-
     row_labels = list(tm.index)
     col_labels = list(tm.columns)
     summary_rows = []
-
     for i in tm.index:
         for j in tm.columns:
             i_pos = row_labels.index(i)
             j_pos = col_labels.index(j)
             expected_val = exp[i_pos][j_pos]
-
             if use_nlcd_labels:
                 f_label = NLCD_LABELS.get(int(i), f"{i}-unknown")
                 t_label = NLCD_LABELS.get(int(j), f"{j}-unknown")
@@ -335,7 +319,6 @@ def chi_square_summary(
             else:
                 f_label = str(i)
                 t_label = str(j)
-
             std_resid = (
                 (tm.loc[i, j] - expected_val) / np.sqrt(expected_val)
                 if expected_val > 0
@@ -354,7 +337,6 @@ def chi_square_summary(
                     "Significance": "Significant" if abs(std_resid) > 2 else "Not",
                 }
             )
-
     return {
         "chi2": round(chi2, 4),
         "p": round(p, 6),
@@ -370,10 +352,8 @@ def land_change_intensity(tm: pd.DataFrame):
     changed = M.values.sum()
     n = len(M)
     uniform = round((changed / n) / total * 100, 2) if total > 0 else 0
-
     gain = (M.sum(axis=0) / total * 100).round(2) if total > 0 else M.sum(axis=0) * 0
     loss = (M.sum(axis=1) / total * 100).round(2) if total > 0 else M.sum(axis=1) * 0
-
     gain_df = pd.DataFrame(
         {
             "Class": gain.index,
@@ -390,7 +370,6 @@ def land_change_intensity(tm: pd.DataFrame):
             "Status": np.where(loss > uniform, "Active Loss", "Dormant Loss"),
         }
     ).round(2)
-
     trans = (M / total * 100).round(2) if total > 0 else M * 0
     trans_flat = trans.reset_index().melt(
         id_vars=trans.index.name or "index", var_name="To", value_name="Intensity(%)"
@@ -401,7 +380,6 @@ def land_change_intensity(tm: pd.DataFrame):
         .sort_values("Intensity(%)", ascending=False)
         .reset_index(drop=True)
     )
-
     return gain_df, loss_df, trans_flat
 
 
@@ -412,14 +390,12 @@ def write_excel_with_title(
     worksheet = writer.sheets[sheet_name]
     workbook = writer.book
     last_col = max(df.shape[1] - 1 + (1 if keep_index else 0), 0)  # Fix for empty dfs
-
     title_format = workbook.add_format(
         {"bold": True, "align": "center", "valign": "vcenter", "font_size": 14}
     )
     desc_format = workbook.add_format(
         {"text_wrap": True, "italic": True, "align": "left", "valign": "top"}
     )
-
     worksheet.merge_range(0, 0, 0, last_col, title_text, title_format)
     if description_text:
         desc_row = 2 + len(df) + 2
@@ -433,11 +409,238 @@ def safe_label(map_dict, code):
     return map_dict.get(code_str, f"{code_str}-empty")
 
 
+# ------------------------------------------------------------------
+# NEW HELPER: VEGETATION STRUCTURE LOGIC
+# ------------------------------------------------------------------
+def export_vegetation_structure(tif_path, out_csv_path):
+    """
+    Process a vegetation raster and export vegetation structure scores + descriptions to CSV.
+    """
+    print("Running Vegetation Structure Logic...")
+    # ============================================================
+    # FULL SCORE DESCRIPTIONS FROM TABLE
+    # ============================================================
+    score_descriptions = {
+        "V1-F": {
+            5: "Remotely viewed total vegetation cover >80%, woody cover >40%. Either crown sizes show a wide diversity OR there are 20 or more tree stems >50 cm dbh/ha.",
+            4: "Remotely viewed total vegetation cover >80%, woody cover >10%. Either crown sizes show a moderate diversity OR there are 10 or more tree stems >50 cm dbh/ha.",
+            3: "Remotely viewed total vegetation cover >50%, woody cover >10%. Either crown sizes show a low diversity OR there are 5 or more tree stems >50 cm dbh/ha.",
+            1: "Remotely viewed total vegetation cover <50%, woody cover <10%. Either crown sizes show a low diversity OR there are <5 tree stems >50 cm dbh/ha.",
+        },
+        "V1-W": {
+            5: "Remotely viewed total vegetation cover >80%, woody cover >20%.",
+            4: "Remotely viewed total vegetation cover >80%, woody cover >10%.",
+            3: "Remotely viewed total vegetation cover >50%, woody cover >10%.",
+            1: "Remotely viewed total vegetation cover <50%, woody cover <10%.",
+        },
+        "V1-Sa": {
+            5: "Remotely viewed shrub cover is moderately high (>40%). There is a diversity of patch types and woody cover <5%.",
+            3: "Remotely viewed shrub cover is open (25–39%). Area shows uniformity, little patch diversity both spatially and vertically (<5%).",
+            1: "Remotely viewed shrub cover is low (<25%). Weedy herbaceous cover may be > shrub cover.",
+        },
+        "V1-Sb": {
+            5: "Remotely viewed shrub cover is ≥15% and <35%. If open shrub type has >35% shrub cover then it is usually invaded by aggressive woody species or is misidentified moderately dense shrubland type.",
+            3: "Remotely viewed total vegetation cover is >10 and <15%.",
+            1: "Remotely viewed shrub cover <10%.",
+        },
+        "V1-Ha": {
+            5: "Remotely viewed total vegetation cover is high (>80% for temperate tall- and mixed-grass grasslands) or near reference conditions. There is a diversity of patch types and woody cover <10%. If herbaceous cover is dominated by annual vegetation, these are native species. For short grass and desert grasslands total cover may be lower (>30%), with high patch diversity.",
+            4: "Remotely viewed total vegetation cover is high (>80% for temperate tall- and mixed-grass grasslands) or near reference conditions. Woody cover <10%. The diversity of patch types may be diminished, but still occurs. If herbaceous cover is dominated by annual vegetation, these are native species. For short grass and desert grasslands total cover >10%, patch diversity much diminished, area uniform.",
+            3: "Remotely viewed total vegetation cover >50%, woody cover <10%. Herbaceous patch diversity both spatially and vertically is low (<10%). For short grass and desert grasslands total cover >10%, patch diversity much diminished, area uniform.",
+            1: "Remotely viewed total vegetation cover <50%, woody cover >10%. For short grass and desert grasslands total cover <10%, patch diversity is non-existent.",
+        },
+        "V1-Hb": {
+            5: "Cool Semi-Desert Steppe: Grass cover >80%, shrubs present and well spaced and generally 5–25% cover. Warm Semi-Desert Steppe: total herbaceous cover at least 50%, shrub cover at least 5% and not more than 20–25%.",
+            3: "Cool Semi-Desert Steppe: Grass cover 51–79%, shrubs may be present or absent; shrubs that increase (e.g. Artemisia tridentata spp. tridentata) may be somewhat more dense than pre-disturbance but still <35% cover. Warm Semi-Desert Steppe: total herbaceous >30 but <50%, shrub cover <5% OR >25%.",
+            1: "Cool Semi-Desert Steppe: Grass cover <50%, or shrubs may be quite dense, with >40% cover. Warm Semi-Desert Steppe: total herbaceous cover <30%, shrub cover <3%, or >40%.",
+        },
+    }
+
+    # ============================================================
+    # READ RASTER
+    # ============================================================
+    with rasterio.open(tif_path) as src:
+        arr = src.read(1)
+        nodata = src.nodata
+        if nodata is not None:
+            arr = np.where(arr == nodata, np.nan, arr)
+
+    # ============================================================
+    # PIXEL COUNTS
+    # ============================================================
+    non_veg_codes = [11, 12, 21, 22, 23, 24]
+    woody_codes = [41, 42, 43, 51, 52, 90]
+    shrub_codes = [51, 52]
+    herb_codes = [71, 72, 81, 82, 90, 95]
+
+    total_pixels = np.count_nonzero(~np.isnan(arr))
+    total_veg_pixels = np.count_nonzero(~np.isin(arr, non_veg_codes) & ~np.isnan(arr))
+    woody_pixels = np.count_nonzero(np.isin(arr, woody_codes) & ~np.isnan(arr))
+    shrub_pixels = np.count_nonzero(np.isin(arr, shrub_codes) & ~np.isnan(arr))
+    herb_pixels = np.count_nonzero(np.isin(arr, herb_codes) & ~np.isnan(arr))
+
+    # ============================================================
+    # COVER %
+    # ============================================================
+    if total_pixels > 0:
+        total_veg_cover = (total_veg_pixels / total_pixels) * 100
+        woody_cover = (woody_pixels / total_pixels) * 100
+        shrub_cover = (shrub_pixels / total_pixels) * 100
+        herb_cover = (herb_pixels / total_pixels) * 100
+    else:
+        total_veg_cover = 0
+        woody_cover = 0
+        shrub_cover = 0
+        herb_cover = 0
+
+    # ============================================================
+    # CLASSIFICATION RULES
+    # ============================================================
+
+    # V1-F Forest
+    if (total_veg_cover > 80) and (woody_cover > 40):
+        v1f_cat, v1f_score = "Sustainable+ (A)", 5
+    elif (total_veg_cover > 80) and (woody_cover > 10):
+        v1f_cat, v1f_score = "Sustainable (B)", 4
+    elif (total_veg_cover > 50) and (woody_cover > 10):
+        v1f_cat, v1f_score = "Transitioning (C)", 3
+    else:
+        v1f_cat, v1f_score = "Degraded (D)", 1
+
+    # V1-W Woodland
+    if (total_veg_cover > 80) and (woody_cover > 25):
+        v1w_cat, v1w_score = "Sustainable+ (A)", 5
+    elif (total_veg_cover > 80) and (woody_cover > 10):
+        v1w_cat, v1w_score = "Sustainable (B)", 4
+    elif (total_veg_cover > 50) and (woody_cover > 10):
+        v1w_cat, v1w_score = "Transitioning (C)", 3
+    else:
+        v1w_cat, v1w_score = "Degraded (D)", 1
+
+    # V1-Sa Closed Shrubland
+    if (shrub_cover >= 40) and (woody_cover <= 5):
+        v1sa_cat, v1sa_score = "Sustainable (A/B)", 5
+    elif (25 <= shrub_cover < 40) and (woody_cover < 5):
+        v1sa_cat, v1sa_score = "Transitioning (C)", 3
+    else:
+        v1sa_cat, v1sa_score = "Degraded (D)", 1
+
+    # V1-Sb Open Shrubland
+    if 15 < shrub_cover < 35:
+        v1sb_cat, v1sb_score = "Sustainable (A/B)", 5
+    elif 10 < shrub_cover <= 15:
+        v1sb_cat, v1sb_score = "Transitioning (C)", 3
+    else:
+        v1sb_cat, v1sb_score = "Degraded (D)", 1
+
+    # V1-Ha Grasslands
+    if (total_veg_cover > 80) and (woody_cover < 10) and (herb_cover > 30):
+        v1ha_cat, v1ha_score = "Sustainable+ (A)", 5
+    elif (total_veg_cover > 80) and (woody_cover < 10) and (herb_cover > 20):
+        v1ha_cat, v1ha_score = "Sustainable (B)", 4
+    elif (total_veg_cover > 50) and (woody_cover < 10) and (herb_cover > 10):
+        v1ha_cat, v1ha_score = "Transitioning (C)", 3
+    else:
+        v1ha_cat, v1ha_score = "Degraded (D)", 1
+
+    # V1-Hb Shrub Steppe
+    steppe_type = "Unclassified"
+    v1hb_cat = "Undefined"
+    v1hb_score = 1
+
+    if (herb_cover > 80) and (5 <= shrub_cover <= 25):
+        steppe_type = "Cool Semi-Desert Steppe"
+        v1hb_cat = "Sustainable (A/B)"
+        v1hb_score = 5
+    elif (51 <= herb_cover <= 79) and (shrub_cover < 35):
+        steppe_type = "Cool Semi-Desert Steppe"
+        v1hb_cat = "Transitioning (C)"
+        v1hb_score = 3
+    elif (herb_cover < 50) or (shrub_cover > 40):
+        steppe_type = "Cool Semi-Desert Steppe"
+        v1hb_cat = "Degraded (D)"
+        v1hb_score = 1
+    elif (herb_cover >= 50) and (5 <= shrub_cover <= 25):
+        steppe_type = "Warm Semi-Desert Steppe"
+        v1hb_cat = "Sustainable (A/B)"
+        v1hb_score = 5
+    elif (30 < herb_cover < 50) and ((shrub_cover < 5) or (shrub_cover > 25)):
+        steppe_type = "Warm Semi-Desert Steppe"
+        v1hb_cat = "Transitioning (C)"
+        v1hb_score = 3
+    elif (herb_cover < 30) or (shrub_cover < 3) or (shrub_cover > 40):
+        steppe_type = "Warm Semi-Desert Steppe"
+        v1hb_cat = "Degraded (D)"
+        v1hb_score = 1
+
+    # ============================================================
+    # BUILD OUTPUT TABLE
+    # ============================================================
+    df = pd.DataFrame(
+        [
+            [
+                "V1-F (Forest)",
+                v1f_cat,
+                v1f_score,
+                score_descriptions["V1-F"][v1f_score],
+            ],
+            [
+                "V1-W (Woodland)",
+                v1w_cat,
+                v1w_score,
+                score_descriptions["V1-W"][v1w_score],
+            ],
+            [
+                "V1-Sa (Shrub Closed)",
+                v1sa_cat,
+                v1sa_score,
+                score_descriptions["V1-Sa"][v1sa_score],
+            ],
+            [
+                "V1-Sb (Shrub Open)",
+                v1sb_cat,
+                v1sb_score,
+                score_descriptions["V1-Sb"][v1sb_score],
+            ],
+            [
+                "V1-Ha (Grasslands)",
+                v1ha_cat,
+                v1ha_score,
+                score_descriptions["V1-Ha"][v1ha_score],
+            ],
+            [
+                f"V1-Hb (Shrub Steppe – {steppe_type})",
+                v1hb_cat,
+                v1hb_score,
+                score_descriptions["V1-Hb"][v1hb_score],
+            ],
+        ],
+        columns=["Task", "Category", "Score", "Score_Description"],
+    )
+
+    # Add common raster metrics
+    df["File"] = os.path.basename(tif_path)
+    df["Total_Pixels"] = total_pixels
+    df["Vegetation_Pixels"] = total_veg_pixels
+    df["Woody_Pixels"] = woody_pixels
+    df["Shrub_Pixels"] = shrub_pixels
+    df["Herb_Pixels"] = herb_pixels
+    df["Total_Veg_Cover_%"] = round(total_veg_cover, 2)
+    df["Woody_Cover_%"] = round(woody_cover, 2)
+    df["Shrub_Cover_%"] = round(shrub_cover, 2)
+    df["Herb_Cover_%"] = round(herb_cover, 2)
+
+    # ============================================================
+    # EXPORT CSV
+    # ============================================================
+    os.makedirs(os.path.dirname(out_csv_path), exist_ok=True)
+    df.to_csv(out_csv_path, index=False)
+    print(f"Vegetation structure CSV exported: {out_csv_path}")
+
+
 # ============================================================
 # === FRAGSTATS LOGIC ========================================
 # ============================================================
-
-
 def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
     """
     Executes the R-based Fragstats analysis.
@@ -447,19 +650,16 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
         return
 
     print("Initializing R for Fragstats analysis...")
-
     # Activate Pandas conversion
     try:
         # pandas2ri.activate()
         landscapemetrics = importr("landscapemetrics")
         raster_pkg = importr("raster")
         base = importr("base")
-
         # Helper for reclass matrix
         r_matrix = ro.r["matrix"]
         calculate_lsm = landscapemetrics.calculate_lsm
         reclassify_r = raster_pkg.reclassify
-
     except Exception as e:
         print(f"Error loading R packages: {e}")
         return
@@ -483,7 +683,6 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
                 "lsm_c_cohesion",
             ]
         )
-
         landscape_metrics = StrVector(
             [
                 "lsm_l_np",
@@ -514,6 +713,7 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
         # Merge & Diff (Class Original)
         class2024_ren = class2024.rename(columns={"value": "value_year2"})
         class2010_ren = class2010.rename(columns={"value": "value_year1"})
+
         compare_class_orig = class2024_ren.merge(
             class2010_ren,
             on=["level", "class", "id", "metric"],
@@ -527,6 +727,7 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
         # Merge & Diff (Landscape Original)
         land2024_ren = land2024.rename(columns={"value": "value_year2"})
         land2010_ren = land2010.rename(columns={"value": "value_year1"})
+
         compare_land_orig = land2024_ren.merge(
             land2010_ren,
             on=["level", "id", "metric"],
@@ -582,7 +783,6 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
             7,
         ]
         reclass_mat = r_matrix(IntVector(reclass_values), ncol=2, byrow=True)
-
         r2010_re = reclassify_r(r2010, reclass_mat)
         r2024_re = reclassify_r(r2024, reclass_mat)
 
@@ -601,6 +801,7 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
         # Merge & Diff (Class Reclass)
         class2024_re_ren = class2024_re.rename(columns={"value": "value_year2"})
         class2010_re_ren = class2010_re.rename(columns={"value": "value_year1"})
+
         compare_class_re = class2024_re_ren.merge(
             class2010_re_ren,
             on=["level", "class", "id", "metric"],
@@ -629,6 +830,7 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
         # Merge & Diff (Landscape Reclass)
         land2024_re_ren = land2024_re.rename(columns={"value": "value_year2"})
         land2010_re_ren = land2010_re.rename(columns={"value": "value_year1"})
+
         compare_land_re = land2024_re_ren.merge(
             land2010_re_ren,
             on=["level", "id", "metric"],
@@ -641,7 +843,6 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
 
         # --- 4. EXPORTING ---
         print("Exporting Fragstats results...")
-
         # Define paths
         class_excel = os.path.join(results_dir, "FRAGSTATS_ClassLevel.xlsx")
         land_excel = os.path.join(results_dir, "FRAGSTATS_LandscapeLevel.xlsx")
@@ -685,7 +886,6 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
         )
 
         print("Fragstats analysis completed successfully.")
-
     except Exception as e:
         print(f"Error during Fragstats execution: {e}")
         import traceback
@@ -696,8 +896,6 @@ def run_fragstats_routine(tif_path_1, tif_path_2, results_dir):
 # ============================================================
 # === MAIN ENDPOINT ==========================================
 # ============================================================
-
-
 @app.post("/api/analyze")
 async def analyze(request: AnalysisRequest):
     try:
@@ -768,21 +966,20 @@ async def analyze(request: AnalysisRequest):
         # ============================================================
         # === FRAGSTATS STEP (INTEGRATED) ============================
         # ============================================================
-
         # We pass the paths to the cropped TIFs we just saved
         run_fragstats_routine(out_tif_year1, out_tif_year2, results_dir)
 
         # ============================================================
         # === TRANSITION MATRIX STEP =================================
         # ============================================================
-
         year1_flat = year1_band.flatten()
         year2_flat = year2_band.flatten()
+
         mask_valid = (~np.isnan(year1_flat)) & (~np.isnan(year2_flat))
         year1_flat = year1_flat[mask_valid].astype(int)
         year2_flat = year2_flat[mask_valid].astype(int)
-        df = pd.DataFrame({"year1": year1_flat, "year2": year2_flat})
 
+        df = pd.DataFrame({"year1": year1_flat, "year2": year2_flat})
         transition_matrix = pd.crosstab(df["year1"], df["year2"]).round(2)
         transition_percent = (
             transition_matrix.div(transition_matrix.sum(axis=1), axis=0) * 100
@@ -793,10 +990,10 @@ async def analyze(request: AnalysisRequest):
 
         year1_re = reclassify(year1_band, RECLASS_DICT)
         year2_re = reclassify(year2_band, RECLASS_DICT)
+
         df_re = pd.DataFrame(
             {"year1_reclass": year1_re.flatten(), "year2_reclass": year2_re.flatten()}
         )
-
         transition_matrix_reclass = pd.crosstab(
             df_re["year1_reclass"], df_re["year2_reclass"]
         ).round(2)
@@ -921,7 +1118,6 @@ async def analyze(request: AnalysisRequest):
         # === NORM & RANK / CHI-SQUARE / INTENSITY ===================
         # ============================================================
         # (Standard processing as per original script)
-
         # Norm/Rank
         norm_orig, rank_orig = normalize_and_rank(
             transition_matrix, label="Original", use_nlcd_labels=True
@@ -959,6 +1155,7 @@ async def analyze(request: AnalysisRequest):
                     "Ranked Change Intensities (Original)",
                     keep_index=False,
                 )
+
             if norm_re is not None:
                 norm_re.to_csv(
                     os.path.join(
@@ -1193,6 +1390,7 @@ async def analyze(request: AnalysisRequest):
                 landuse_change = (year1_re.astype(int) * 10) + year2_re.astype(int)
                 from_class = landuse_change // 10
                 to_class = landuse_change % 10
+
                 from_class = np.where(
                     (from_class >= 1) & (from_class <= 7), from_class, 0
                 )
@@ -1221,12 +1419,12 @@ async def analyze(request: AnalysisRequest):
                     src_transform = meta_year1["transform"]
                     src_height = meta_year1["height"]
                     src_width = meta_year1["width"]
+
                     # Calculate bounds of the source
                     src_bounds = array_bounds(src_height, src_width, src_transform)
 
                     # Destination: Web Mercator
                     dst_crs = "EPSG:3857"
-
                     # Calculate transform for destination
                     (
                         dst_transform,
@@ -1258,7 +1456,6 @@ async def analyze(request: AnalysisRequest):
 
                     # --- PLOTTING ---
                     fig, ax = plt.subplots(figsize=(10, 10))
-
                     # Set limits
                     ax.set_xlim(left, right)
                     ax.set_ylim(bottom, top)
@@ -1303,9 +1500,7 @@ async def analyze(request: AnalysisRequest):
                         f"Land Cover Type Transition from Various Types to Land Use Type -  {LC_NAMES[target]} ({year1}–{year2})",
                         fontsize=16,
                     )
-
                     ax.axis("off")
-
                     plt.tight_layout()
                     plt.savefig(
                         os.path.join(
@@ -1322,6 +1517,19 @@ async def analyze(request: AnalysisRequest):
                 import traceback
 
                 traceback.print_exc()
+
+        # ============================================================
+        # === INTEGRATION STEP: VEGETATION STRUCTURE =================
+        # ============================================================
+        try:
+            # We use out_tif_year2 which is the cropped Year 2 raster we created earlier.
+            veg_structure_csv = os.path.join(results_dir, "vegetation_structure.csv")
+            export_vegetation_structure(out_tif_year2, veg_structure_csv)
+        except Exception as e:
+            print(f"Vegetation Structure Logic Error: {e}")
+            import traceback
+
+            traceback.print_exc()
 
         # Metadata
         metadata = {
@@ -1347,8 +1555,8 @@ async def analyze(request: AnalysisRequest):
                     file_path = os.path.join(root, file)
                     zf.write(file_path, os.path.relpath(file_path, results_dir))
         zip_buffer.seek(0)
-        shutil.rmtree(output_dir, ignore_errors=True)
 
+        shutil.rmtree(output_dir, ignore_errors=True)
         return StreamingResponse(
             zip_buffer,
             media_type="application/zip",
