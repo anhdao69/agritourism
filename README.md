@@ -34,6 +34,7 @@ GOOGLE_CLIENT_SECRET=""
 ```
 
 ## Run frontend
+```
 npm install prisma --save-dev
 npm install @prisma/client
 docker-compose up --build -d
@@ -41,7 +42,7 @@ npx prisma generate
 npx prisma db pull
 npx prisma db seed
 docker-compose exec app npx prisma studio
-
+```
 ## Run backend
 ```
 cd backend
@@ -49,5 +50,6 @@ docker build -t agritourism-backend .
 docker run -p 8000:8000  -v "D:\agritourism:/data" agritourism-backend
 
 ```
+
 
 
