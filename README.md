@@ -1,39 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## COPY the .env file
+```
+# NextAuth v4
+NEXTAUTH_SECRET="758911571cd693685a43591b38cbc748b6860a3802519edb0f2a4034c0b006a0"
 
-## Getting Started
+# DBs
+NEXTAUTH_URL="http://localhost:3000"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
-First, run the development server:
+# Databases
+# Use the dedicated app user we just created
+DATABASE_URL="mysql://agri:agripass@localhost:3307/agritourism"
+SHADOW_DATABASE_URL="mysql://agri:agripass@localhost:3307/agritourism_shadow"
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+AWS_REGION="us-east-1"
+AWS_SMTP_USER="AKIATCZBGNUAL2KF33HB"        # NOT the SES SMTP username
+AWS_SMTP_PASS="BOaS3ra1ad7jjUeC6MM3bw/nzPzvmw/eGinu2ElHaKhS"
+
+# --- SES From identity (must be verified in SES; domain or mailbox) ---
+SES_FROM_EMAIL="cuiyue@msu.edu"
+SES_FROM_NAME="Yue Cui"
+
+AWS_SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+AWS_SMTP_PORT=587
+
+# Seed admin (used by prisma/seed.ts one-time)
+SEED_ADMIN_EMAIL="admin@example.com"
+SEED_ADMIN_PASSWORD="Admin123!"
+
+# (Optional) Google OAuth (if you keep the button)
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-docker-compose exec app npx prisma studio
+## Run frontend
+npm install prisma --save-dev
+npm install @prisma/client
 docker-compose up --build -d
+npx prisma generate
+npx prisma db pull
+npx prisma db seed
+docker-compose exec app npx prisma studio
+
+## Run backend
+```
+cd backend
+docker build -t agritourism-backend .
+docker run -p 8000:8000  -v "D:\agritourism:/data" agritourism-backend
+
+```
+
+
