@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Save, FileSpreadsheet, ArrowLeft, Loader } from "lucide-react";
+import { Save, FileSpreadsheet, ArrowLeft, Loader, MessageSquareText, Bot, Sparkles} from "lucide-react";
 import * as XLSX from "xlsx"; // npm install xlsx
 
 /** —— Helpers & types —— */
@@ -309,10 +310,21 @@ export default function VegetFormPage() {
   const searchParams = useSearchParams();
   const ombilSiteId = searchParams.get("ombilSiteId") || "";
 
+  const year1 = searchParams.get("year1") || "2010"; 
+  const year2 = searchParams.get("year2") || "2024";
+
   // 1. Scoring State
   const [answers, setAnswers] = useState<Record<string, number | null>>(
-    Object.fromEntries(QUESTIONS.map((q) => [q.id, null]))
+    Object.fromEntries(QUESTIONS.map((q) => [q.id, 3]))
   );
+
+  const getAnalysisLink = () => {
+    const params = new URLSearchParams();
+    if (metadata.siteId) params.set("ombilSiteId", metadata.siteId);
+    params.set("year1", year1);
+    params.set("year2", year2);
+    return `/llm-analysis?${params.toString()}`;
+  };
 
   // 2. Metadata State (User Input)
   const [metadata, setMetadata] = useState({
@@ -333,6 +345,8 @@ export default function VegetFormPage() {
       setMetadata((prev) => ({ ...prev, siteId: ombilSiteId }));
     }
   }, [ombilSiteId]);
+
+  
 
   // Calculations
   const byCategory = useMemo(() => {
@@ -464,12 +478,26 @@ export default function VegetFormPage() {
 
       <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8 py-8">
         <header className="mb-6">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 mb-4 text-emerald-700 hover:text-emerald-900 transition"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
-          </button>
+          {/* 👇 Changed: Flex container to hold Back button and Prompt button */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-emerald-700 hover:text-emerald-900 transition"
+            >
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+
+            {/* 👇 NEW: Prompt Library Button */}
+            <Link
+              href="/prompts"
+              target="_blank" // Open in new tab to preserve form data
+              className="flex items-center gap-2 rounded-lg bg-emerald-100 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-200 transition"
+            >
+              <MessageSquareText className="w-4 h-4" />
+              Prompt Library
+            </Link>
+          </div>
+
           <h1 className="text-2xl sm:text-3xl font-semibold text-emerald-900">
             Vegetation & Ecological Integrity Form
           </h1>
@@ -647,14 +675,14 @@ export default function VegetFormPage() {
           )}
 
           <div className="sticky bottom-4 z-10 bg-white/90 backdrop-blur p-4 rounded-2xl border border-emerald-100 shadow-lg flex flex-wrap items-center justify-between gap-4">
-             <div className="text-xs text-emerald-900/60 hidden sm:block">
+            <div className="text-xs text-emerald-900/60 hidden sm:block">
               Legend: 5=A (Best) ... 1=E (Worst)
             </div>
             
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setAnswers(Object.fromEntries(QUESTIONS.map((q) => [q.id, null])))}
+                onClick={() => setAnswers(Object.fromEntries(QUESTIONS.map((q) => [q.id, 3])))}
                 className="rounded-xl border border-emerald-900/15 bg-white px-4 py-2.5 text-sm font-medium shadow-sm hover:bg-emerald-50 transition"
               >
                 Clear Form
@@ -668,6 +696,15 @@ export default function VegetFormPage() {
                 <FileSpreadsheet className="w-4 h-4" />
                 Download Excel
               </button>
+
+              <Link
+                href={getAnalysisLink()}
+                target="_blank"
+                className="flex items-center gap-2 rounded-xl bg-indigo-600 text-white px-4 py-2.5 text-sm font-semibold shadow-sm hover:bg-indigo-700 transition"
+              >
+                <Sparkles className="w-4 h-4" />
+                LLM Analysis
+              </Link>
 
               <button
                 type="submit"

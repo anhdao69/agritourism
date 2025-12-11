@@ -163,3 +163,31 @@ enum UserStatus {
   SUSPENDED // Account suspended by admin
   DELETED // Soft deleted
 }
+
+model VegetationLog {
+  id           String   @id @default(cuid())
+  siteId       String // Matches ombilSiteId
+  observerName String?
+  date         DateTime // Date of the observation
+  notes        String?  @db.Text
+
+  // High-level scores for analytics
+  overallScore  Float?
+  overallRating String?
+
+  // Section Averages
+  landscapeAvg Float?
+  sizeAvg      Float?
+  vegAvg       Float?
+  soilAvg      Float?
+  hydroAvg     Float?
+
+  // Raw answers (L1, L2, V1, etc.) stored as JSON
+  answers Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteId])
+  @@index([date])
+}
